@@ -10,6 +10,8 @@ Steps:
 
 Usage:
   python src/semantic_search.py "how do I deploy a service to kubernetes"
+  python src/semantic_search.py --multilingual "¿Cómo solicito vacaciones?"
+  python src/semantic_search.py --multilingual  # reuse one index interactively
   python src/semantic_search.py            # interactive mode
   python src/semantic_search.py --demo     # run the example queries used in the report
   python src/semantic_search.py --demo --baseline   # same, without stemming / expansion
@@ -60,9 +62,38 @@ class SemanticSearch:
         return [vocab[i] for i in vec.nonzero()[1]]
 
 
+class MultilingualSearch:
+    """Keep one E5 model and one full-document embedding index per session."""
+
+    def __init__(self, df):
+        from sentence_transformers import SentenceTransformer
+
+        self.df = df.reset_index(drop=True)
+        self.model = SentenceTransformer("intfloat/multilingual-e5-small", device="cpu")
+        passages = ["passage: " + content for content in self.df["content"]]
+        self.vectors = self.model.encode(
+            passages, normalize_embeddings=True, show_progress_bar=False
+        )
+
+    def search(self, query, top_k=5):
+        query = query.strip()
+        if not query:
+            raise ValueError("Escribe una pregunta.")
+        if top_k < 1:
+            raise ValueError("top_k debe ser positivo.")
+        vector = self.model.encode(
+            "query: " + query, normalize_embeddings=True, show_progress_bar=False
+        )
+        results = self.df[["id", "title", "category", "text"]].assign(
+            similarity=self.vectors @ vector
+        )
+        return results.nlargest(top_k, "similarity")
+
+
 def show(engine, query, top_k):
     print(f'\nQuery: "{query}"')
-    print(f"Matched terms: {', '.join(engine.query_terms(query)) or '(none)'}")
+    if isinstance(engine, SemanticSearch):
+        print(f"Matched terms: {', '.join(engine.query_terms(query)) or '(none)'}")
     results = engine.search(query, top_k=top_k)
     if results.empty:
         print("  No relevant documents found.")
@@ -73,21 +104,33 @@ def show(engine, query, top_k):
 
 def main():
     parser = argparse.ArgumentParser(description="Softtek KMS semantic search")
-    parser.add_argument("query", nargs="?", help="natural-language query")
+    parser.add_argument("queries", nargs="*", help="one or more quoted questions")
     parser.add_argument("-k", "--top-k", type=int, default=5)
     parser.add_argument("--demo", action="store_true", help="run the example queries")
-    parser.add_argument("--baseline", action="store_true", help="disable stemming and query expansion")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--multilingual", action="store_true", help="search with multilingual E5")
+    modes.add_argument("--baseline", action="store_true", help="disable stemming and query expansion")
     args = parser.parse_args()
 
-    engine = SemanticSearch(load_documents(), baseline=args.baseline)
-    print(f"Indexed {engine.doc_matrix.shape[0]} documents, "
-          f"vocabulary of {engine.doc_matrix.shape[1]} TF-IDF terms.")
+    if args.top_k < 1:
+        parser.error("--top-k debe ser positivo")
+    if any(not query.strip() for query in args.queries):
+        parser.error("Escribe una pregunta.")
+    docs = load_documents()
+    if args.multilingual:
+        engine = MultilingualSearch(docs)
+        print(f"E5: {len(docs)} documentos indexados para esta sesión.")
+    else:
+        engine = SemanticSearch(docs, baseline=args.baseline)
+        print(f"Indexed {engine.doc_matrix.shape[0]} documents, "
+              f"vocabulary of {engine.doc_matrix.shape[1]} TF-IDF terms.")
 
     if args.demo:
         for q in DEMO_QUERIES:
             show(engine, q, args.top_k)
-    elif args.query:
-        show(engine, args.query, args.top_k)
+    elif args.queries:
+        for query in args.queries:
+            show(engine, query, args.top_k)
     else:
         print("Type a question (empty line to exit).")
         while (q := input("\nSearch> ").strip()):
