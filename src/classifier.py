@@ -1,5 +1,5 @@
 """
-Automated document classification prototype (Softtek KMS).
+Knowledge Hub document classifier (Softtek case study).
 
 Steps:
   1. Load the sample documents (data/documents.csv).
@@ -12,12 +12,9 @@ Usage:
   python src/classifier.py --text "The API returned 500 errors for an hour after the deploy"
 """
 import argparse
+import os
 
 import joblib
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -25,11 +22,12 @@ from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score,
                              classification_report)
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import FeatureUnion, Pipeline
 
 from kms_utils import CATEGORIES, DATA_DIR, OUTPUT_DIR, load_documents, tokenize
 
 SEED = 42
+REVIEW_THRESHOLD = 0.40
 
 
 def build_pipeline(model):
@@ -47,19 +45,39 @@ MODELS = {
 }
 
 
+def build_combined_pipeline():
+    """Combine word and character TF-IDF features for the final classifier."""
+    pipe = build_pipeline(MODELS["Logistic Regression"]())
+    features = FeatureUnion([
+        ("words", pipe["tfidf"]),
+        ("chars", TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5),
+                                  sublinear_tf=True)),
+    ])
+    return pipe.set_params(tfidf=features)
+
+
+def review_status(confidence):
+    return "Aceptada" if confidence >= REVIEW_THRESHOLD else "Requiere revisión"
+
+
 def evaluate(df):
     """Hold-out evaluation + 5-fold cross-validation for each model."""
+    os.environ["MPLBACKEND"] = "Agg"
+    import matplotlib.pyplot as plt
+
     X_train, X_test, y_train, y_test = train_test_split(
         df["content"], df["category"], test_size=0.25, stratify=df["category"], random_state=SEED)
     print(f"Training documents: {len(X_train)} | Test documents: {len(X_test)}\n")
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
     results = {}
-    for name, make in MODELS.items():
-        pipe = build_pipeline(make()).fit(X_train, y_train)
+    pipelines = {name: build_pipeline(make()) for name, make in MODELS.items()}
+    pipelines["Logistic Regression Combined"] = build_combined_pipeline()
+    for name, pipe in pipelines.items():
+        pipe.fit(X_train, y_train)
         pred = pipe.predict(X_test)
         acc = accuracy_score(y_test, pred)
-        cv_scores = cross_val_score(build_pipeline(make()), df["content"], df["category"], cv=cv)
+        cv_scores = cross_val_score(pipe, df["content"], df["category"], cv=cv)
         results[name] = (acc, cv_scores.mean(), cv_scores.std())
 
         print("=" * 70)
@@ -104,6 +122,8 @@ def main():
     parser = argparse.ArgumentParser(description="Softtek KMS document classifier")
     parser.add_argument("--text", help="classify a single piece of text")
     args = parser.parse_args()
+    if args.text is not None and not args.text.strip():
+        parser.error("--text requires non-empty text")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
     df = load_documents()
@@ -113,22 +133,22 @@ def main():
     evaluate(df)
 
     # Final model: Logistic Regression trained on the full collection.
-    final = build_pipeline(MODELS["Logistic Regression"]()).fit(df["content"], df["category"])
+    final = build_combined_pipeline().fit(df["content"], df["category"])
     joblib.dump(final, OUTPUT_DIR / "classifier.joblib")
     top_terms(final)
 
-    if args.text:
+    if args.text is not None:
         cat, conf = classify(final, [args.text])[0]
-        print(f"Text: {args.text}\n-> {cat} (confidence {conf:.2f})")
+        print(f"Text: {args.text}\n-> {cat} (confidence {conf:.3%}) | {review_status(conf)}")
         return
 
     new = pd.read_csv(DATA_DIR / "new_documents.csv")
     print("Classifying new, unlabelled documents (data/new_documents.csv):")
     rows = []
     for (_, doc), (cat, conf) in zip(new.iterrows(), classify(final, new["text"])):
-        print(f"  [{doc['id']}] {doc['text'][:70]}...\n        -> {cat} (confidence {conf:.2f})")
+        print(f"  [{doc['id']}] {doc['text'][:70]}...\n        -> {cat} (confidence {conf:.3%}) | {review_status(conf)}")
         rows.append({"id": doc["id"], "text": doc["text"], "predicted_category": cat,
-                     "confidence": round(conf, 3)})
+                     "confidence": conf, "status": review_status(conf)})
     pd.DataFrame(rows).to_csv(OUTPUT_DIR / "new_documents_classified.csv", index=False)
     print("\nResults saved to outputs/new_documents_classified.csv")
 
