@@ -1,8 +1,38 @@
-# Sistema de Gestión del Conocimiento (KMS) — caso de estudio Softtek
+# Softtek Knowledge Hub
 
 Prototipo de un sistema de gestión del conocimiento aplicado como caso de estudio académico a Softtek (Monterrey, México): clasificación automática de documentos y búsqueda semántica con TF-IDF, más una ontología OWL/SKOS del conocimiento organizacional.
 
 > Los datos de la empresa provienen de fuentes públicas (Softtek Fast Facts 2024 y Wikipedia). Los documentos de ejemplo, las instancias de la ontología y los resultados son ilustrativos; no son datos internos de Softtek.
+
+## Ejecutar la interfaz en Windows
+
+Softtek Knowledge Hub permite clasificar documentos, buscar información en español, consultar documentos relacionados y hacer preguntas a un chatbot que cita su fuente. La interfaz también permite explorar el grafo conceptual y revisar las métricas del prototipo.
+
+### Primera instalación
+
+Entorno probado: Windows, Git y Python 3.13. Desde PowerShell:
+
+```powershell
+git clone --branch fase-2 https://github.com/ierisaac2005-png/softtek-knowledge-hub.git
+cd softtek-knowledge-hub
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-ui.txt -r requirements-search.txt
+.\.venv\Scripts\python.exe -m streamlit run src\app.py
+```
+
+Abre la dirección local que muestra Streamlit. La primera consulta de búsqueda o del chatbot necesita conexión a internet para descargar los modelos. Mantén PowerShell abierto mientras usas la interfaz.
+
+### Volver a abrir el proyecto
+
+Desde la carpeta del repositorio:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run src\app.py
+```
+
+### Comprobar la instalación
+
+En **Busqueda**, escribe «¿Qué debo hacer para pedir días de vacaciones?». El primer resultado esperado es `PP08 · Vacation and Leave Policy`. Las pruebas de clasificación, búsqueda, chatbot y grafo están documentadas en `notebooks/`.
 
 ## Entregables
 
