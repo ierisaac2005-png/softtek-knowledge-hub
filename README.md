@@ -38,8 +38,8 @@ En **Busqueda**, escribe «¿Qué debo hacer para pedir días de vacaciones?». 
 
 | Entregable | Dónde está |
 | --- | --- |
-| Documento de avance (PDF) | [`Softtek_KMS_Reporte.pdf`](Softtek_KMS_Reporte.pdf) |
-| Presentación | [`Softtek_KMS_Presentacion.pptx`](Softtek_KMS_Presentacion.pptx) / [`.pdf`](Softtek_KMS_Presentacion.pdf) (también en inglés: `Softtek_KMS_Presentation.*`) |
+| Reporte del avance inicial | [Ver PDF](docs/avance-inicial/Softtek_KMS_Reporte.pdf) |
+| Presentaciones del avance inicial | Español [PPTX](docs/avance-inicial/Softtek_KMS_Presentacion.pptx) · [PDF](docs/avance-inicial/Softtek_KMS_Presentacion.pdf) / Inglés [PPTX](docs/avance-inicial/Softtek_KMS_Presentation.pptx) · [PDF](docs/avance-inicial/Softtek_KMS_Presentation.pdf) |
 | Código fuente del prototipo | [`src/`](src/) |
 | Scripts de clasificación automática | [`src/classifier.py`](src/classifier.py) |
 | Implementación de la búsqueda semántica | [`src/semantic_search.py`](src/semantic_search.py) |
