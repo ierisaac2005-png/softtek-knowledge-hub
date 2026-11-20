@@ -1,0 +1,11 @@
+﻿Componente,Prueba,Qué se midió,Conteo,Total,Resultado
+Clasificación,Original · validación cruzada,Documentos bien clasificados,54,60,90.0%
+Clasificación,Combinado · validación cruzada,Documentos bien clasificados,57,60,95.0%
+Clasificación,Combinado · umbral del 40%,Aciertos entre los aceptados,41,42,97.6%
+Clasificación,Combinado · umbral del 40%,Documentos aceptados automáticamente,42,60,70.0%
+Búsqueda en español,TF-IDF,Documento esperado en primer lugar,1,10,10.0%
+Búsqueda en español,E5 multilingüe,Documento esperado en primer lugar,9,10,90.0%
+Recomendación,IR01 · similitud textual,Vínculos conocidos recuperados en top 5,1,2,50.0%
+Recomendación,IR01 · ontología + similitud,Vínculos conocidos recuperados en top 5,2,2,100.0%
+Recomendación,IR07 · evaluación manual,Sugerencias relevantes en top 5,1,5,20.0%
+Ontología,Corpus completo,Documentos con una ruta de recomendación,6,60,10.0%
