@@ -25,6 +25,7 @@ if consultar:
 
         st.subheader("Respuesta")
         st.write(resultado["response"])
-        st.caption(f"Fuente consultada: [{resultado['source_id']}] {resultado['title']}")
+        if resultado["source_id"]:
+            st.caption(f"Fuente consultada: [{resultado['source_id']}] {resultado['title']}")
     else:
         st.warning("Escribe una pregunta para consultar.")

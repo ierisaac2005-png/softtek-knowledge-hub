@@ -1,6 +1,7 @@
 """Chatbot de Knowledge Hub con recuperación de documentos y citas."""
 
 import argparse
+import re
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -17,9 +18,60 @@ INSTRUCTIONS = (
 )
 
 
+EJEMPLOS_INTENCION = {'Ayuda del chatbot': ['Quiero saber qué puedes hacer por mí.',
+                       'Explícame cómo usar este asistente.',
+                       '¿Qué tipo de preguntas te puedo hacer?',
+                       '¿Para qué sirve esta herramienta de conversación?'],
+ 'Consulta documental': ['¿Dónde presento una solicitud de vacaciones?',
+                         '¿Quién supervisa el cumplimiento de la política de '
+                         'privacidad?',
+                         '¿Qué permisos se necesitan para acceder a los '
+                         'sistemas?',
+                         '¿Cuál fue la causa del retraso en el procesamiento '
+                         'de pedidos?']}
+UMBRAL_AYUDA = 0.020
+RESPUESTA_AYUDA = (
+    "Puedo buscar información en los documentos del proyecto, responder en español "
+    "y mostrarte la fuente consultada. Puedes preguntarme cómo solicitar vacaciones "
+    "o qué causó el incidente de pagos."
+)
+
+
+def pide_documento(pregunta):
+    # Solo se activa cuando la petición comienza pidiendo un documento.
+    patron = (
+        r"^[¿¡\s]*(?:por favor[,\s]+)?"
+        r"(?:(?:me (?:ayudas|puedes ayudar) a|puedes|quiero|necesito)\s+)?"
+        r"(?:encontrar|buscar|localizar|ver|m[oó]strame|mu[eé]strame|busca|encuentra|localiza)"
+        r"\s+(?:el|la|un|una)\s+(?:reporte|informe|documento|guía|guia|política|politica)\b"
+    )
+    return re.search(patron, pregunta, flags=re.IGNORECASE) is not None
+
+
 class KnowledgeChatbot:
     def __init__(self):
         self.search = MultilingualSearch(load_documents())
+        self.vectores_intencion = {
+            ruta: self.search.model.encode(
+                ["query: " + ejemplo for ejemplo in ejemplos],
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+            for ruta, ejemplos in EJEMPLOS_INTENCION.items()
+        }
+        self.model = None
+
+    def es_ayuda(self, pregunta):
+        vector = self.search.model.encode(
+            "query: " + pregunta, normalize_embeddings=True, show_progress_bar=False
+        )
+        puntajes = {}
+        for ruta, vectores in self.vectores_intencion.items():
+            mejores = sorted(float(valor) for valor in vectores @ vector)[-2:]
+            puntajes[ruta] = sum(mejores) / 2
+        return puntajes["Ayuda del chatbot"] - puntajes["Consulta documental"] >= UMBRAL_AYUDA
+
+    def cargar_generador(self):
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
         self.model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID, dtype="auto"
@@ -30,7 +82,19 @@ class KnowledgeChatbot:
         if not question:
             raise ValueError("Escribe una pregunta.")
 
+        if self.es_ayuda(question):
+            return {"response": RESPUESTA_AYUDA, "source_id": None, "title": None}
+
         source = self.search.search(question, top_k=1).iloc[0]
+        if pide_documento(question):
+            return {
+                "response": f"Documento más cercano: {source['title']} [{source['id']}]",
+                "source_id": source["id"],
+                "title": source["title"],
+            }
+
+        if self.model is None:
+            self.cargar_generador()
         messages = [
             {"role": "system", "content": INSTRUCTIONS},
             {
@@ -81,7 +145,8 @@ def main():
     def show(question):
         result = bot.answer(question)
         print(f"\nPregunta: {question}")
-        print(f"Fuente consultada: [{result['source_id']}] {result['title']}")
+        if result["source_id"]:
+            print(f"Fuente consultada: [{result['source_id']}] {result['title']}")
         print(f"Respuesta: {result['response']}")
 
     if args.questions:
